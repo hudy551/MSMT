@@ -51,6 +51,10 @@ this_year <- Sys.time() %>%
   format("%Y") %>%
   as.numeric()
 
+if(as.numeric(format(Sys.time(), "%m")) < 10){
+  this_year <- this_year - 1
+}
+
 dsia_list <- lapply(2015:this_year, function(z){
 
   data_dsia <- httr::GET(paste0("https://dsia.msmt.cz/vystupy/region/vu_region", z,".html")) %>%
@@ -433,7 +437,6 @@ usethis::use_data(msmt_tables_cs,
                   msmt_browser_en,
                   msmt_labels_cs,
                   msmt_labels_en,
-                  msmt_forms,
                   msmt_forms_cs,
                   msmt_forms_en,
                   msmt_forms_availability,
