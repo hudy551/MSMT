@@ -1,20 +1,28 @@
 Package: MSMT
-Title: What the Package Does (One Line, Title Case)
+Title: Manage Data from the Czech Ministry of Education, Youth and Sports
 Version: 0.0.0.9000
 Authors@R: 
-    person(given = "First",
-           family = "Last",
+    person(given = "Jiri",
+           family = "Munich",
            role = c("aut", "cre"),
-           email = "first.last@example.com",
-           comment = c(ORCID = "YOUR-ORCID-ID"))
-Description: What the package does (one paragraph).
-License: `use_mit_license()`, `use_gpl3_license()` or friends to pick a
-    license
+           email = "munich.jiri@gmail.com")
+Description: This package is designed to facilitate the use of administrative data about Czech schools and educational facilities. It contains functions to download, connect and browse the available data, as well as several utilities for working with their spatial dimension of.
+License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.1.1
+RoxygenNote: 7.2.3
 Imports: 
-    magrittr
+    magrittr (>= 2.0.1),
+    RCzechia,
+    stringr,
+    tidygeocoder,
+    dplyr, 
+    readxl, 
+    sf, 
+    tibble, 
+    tidyr, 
+    units,
+    xml2
 Depends: 
     R (>= 2.10)
