@@ -19,7 +19,7 @@
 #' }
 #'
 #' @examples
-#' data_locations <- msmt_download_data(form = "M03", years = 2019:2022)
+#' data_locations <- msmt_download_data(form = "M03", years = 2015:2022)
 #' data_list <- msmt_read_data(data_locations = data_locations)
 #'
 #' @importFrom dplyr group_by select all_of summarise distinct inner_join bind_rows mutate mutate_if
@@ -63,12 +63,15 @@ msmt_read_data <- function(data_locations,
 
   temp_list_data <- lapply(seq_along(data_locations),
                            function(x){
+
                              temp_sets <- lapply(seq_along(temp_sheets[[x]]),
                                                  function(y){
+
                                                    temp_sheet <- read_excel(path = data_locations[x],
                                                                             sheet = temp_sheets[[x]][y],
                                                                             .name_repair = tolower,
                                                                             col_types = "text") %>%
+                                                     `names<-`(ifelse(names(.) == "", paste0("no_name_", 1:ncol(.)), names(.))) %>%
                                                      mutate(form = temp_forms[x],
                                                             year = temp_years[x])
 
