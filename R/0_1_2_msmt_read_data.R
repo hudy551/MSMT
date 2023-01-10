@@ -123,7 +123,7 @@ msmt_read_data <- function(data_locations,
                                    temp_data_add <- temp_data_list_wide[[i]] %>%
                                      select(all_of(c(id_vec, temp_msmt_vars_1)))
 
-                                   temp_data_wide <- inner_join(temp_data_wide,
+                                   temp_data_wide <- full_join(temp_data_wide,
                                                                        temp_data_add,
                                                                        id_vec)
 
