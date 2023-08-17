@@ -22,7 +22,7 @@
 #' data_locations <- msmt_download_data(form = "M03", years = 2015:2022)
 #' data_list <- msmt_read_data(data_locations = data_locations)
 #'
-#' @importFrom dplyr group_by select all_of summarise distinct inner_join bind_rows mutate mutate_if
+#' @importFrom dplyr group_by select all_of summarise distinct inner_join full_join bind_rows mutate mutate_if
 #' @importFrom readxl excel_sheets read_excel
 #' @importFrom utils txtProgressBar setTxtProgressBar
 #'
