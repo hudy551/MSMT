@@ -51,23 +51,39 @@ msmt_addresses <- function(NUTS3 = "all"){
 
     cat(paste0("\n\nUnnesting '", temp_nuts, "' [1/3]"))
 
-    suppressMessages({step_2 <- step_1 %>%
+    step_2 <- tryCatch({
+    expr = suppressMessages({step_1 %>%
       unnest_wider(all_of("ExportDat")) %>%
       .[-1,-1] %>%
       mutate(RedIzo = unlist(.data$RedIzo),
              ICO = unlist(.data$ICO)) %>%
       unnest_wider(all_of("Reditelstvi"))})
+    },
+    error = function(x) "Error")
+
+    if(step_2 == "Error"){
+      step_2 <- suppressMessages({step_1 %>%
+          unnest_wider(all_of("ExportDat"), names_sep = "") %>%
+          .[-1,-1] %>%
+          `names<-`(gsub("ExportDat", "", names(.))) %>%
+          mutate(RedIzo = unlist(.data$RedIzo),
+                 ICO = unlist(.data$ICO)) %>%
+          unnest_wider(all_of("Reditelstvi"))})
+    }
 
     cat(paste0("\nUnnesting '", temp_nuts, "' [2/3]"))
 
+    suppressMessages({
     step_3 <- step_2 %>%
       mutate(RedPlnyNazev = unlist(all_of("RedPlnyNazev"))) %>%
       unnest_wider(all_of("Reditel")) %>%
       unnest_longer(all_of("Zrizovatele")) %>%
       unnest_wider(all_of("Zrizovatele"))
+    })
 
     cat(paste0("\nUnnesting '", temp_nuts, "' [3/3]\n"))
 
+    suppressMessages({
     step_4 <- step_3 %>%
       unnest_longer(all_of("SkolyZarizeni")) %>%
       unnest_wider(all_of("SkolyZarizeni")) %>%
@@ -81,6 +97,7 @@ msmt_addresses <- function(NUTS3 = "all"){
              izo = .data$IZO,
              p_izo = .data$IDMista) %>%
       select(all_of(c("red_izo", "izo", "p_izo", "ico")), everything())
+    })
 
     return(step_4)
   }) %>%
