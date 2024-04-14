@@ -314,7 +314,8 @@ msmt_coordinates <- function(data_addresses,
                             }) %>%
       bind_cols()
 
-    temp_coordinates <- bind_cols(temp_complete)
+    temp_coordinates <- bind_cols(temp_coordinates,
+                                  temp_complete)
   }
 
 
