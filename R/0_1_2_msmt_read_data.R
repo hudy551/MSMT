@@ -124,14 +124,38 @@ msmt_read_data <- function(data_locations,
 
                                      temp_msmt_vars_1_0 <- names(temp_data_list_wide[[i]])
                                      temp_msmt_vars_1 <- temp_msmt_vars_1_0[is_msmt_var(temp_msmt_vars_1_0)]
+                                     id_vec_filt_0_1 <- id_vec[id_vec %in% names(temp_data_wide)]
                                      id_vec_filt_1 <- id_vec[id_vec %in% temp_msmt_vars_1_0]
 
+                                     id_abs_1_0 <- sum(!id_vec_filt_0_1 %in% id_vec_filt_1)
+                                     id_abs_0_1 <- sum(!id_vec_filt_1 %in% id_vec_filt_0_1)
+
+                                     if(id_abs_0_1 != 0){
+                                       temp_fake_id_0_1 <- lapply(1:id_abs_0_1,
+                                                              function(x){rep(999, nrow(temp_data_wide))}) %>%
+                                         `names<-`(id_vec_filt_1[!id_vec_filt_1 %in% id_vec_filt_0_1]) %>%
+                                         as_tibble()
+
+                                       temp_data_wide <- bind_cols(temp_fake_id, temp_data_wide)
+                                     }
+
+                                     if(id_abs_1_0 != 0){
+                                       temp_fake_id_1_0 <- lapply(1:id_abs_1_0,
+                                                              function(x){rep(999, nrow(temp_data_list_wide[[i]]))}) %>%
+                                         `names<-`(id_vec_filt_1[!id_vec_filt_0_1 %in% id_vec_filt_1]) %>%
+                                         as_tibble()
+
+                                       temp_data_list_wide[[i]] <- bind_cols(temp_fake_id, temp_data_list_wide[[i]])
+                                     }
+
                                      temp_data_add <- temp_data_list_wide[[i]] %>%
-                                       select(all_of(c(id_vec, temp_msmt_vars_1)))
+                                       select(all_of(c(id_vec_filt_1, temp_msmt_vars_1)))
+
+                                     id_vec_match <- unique(c(id_vec_filt_1, id_vec_filt_0_1))
 
                                      temp_data_wide <- full_join(temp_data_wide,
                                                                  temp_data_add,
-                                                                 id_vec)
+                                                                 id_vec_match)
 
                                      temp_data_wide_ids <- bind_rows(temp_data_wide_ids,
                                                                      temp_data_list_wide[[i]] %>%
