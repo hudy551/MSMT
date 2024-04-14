@@ -19,10 +19,10 @@
 #' }
 #'
 #' @examples
-#' data_locations <- msmt_download_data(form = "M03", years = 2015:2022)
+#' data_locations <- msmt_download_data(form = "M03", years = 2015:2023)
 #' data_list <- msmt_read_data(data_locations = data_locations)
 #'
-#' @importFrom dplyr group_by select all_of summarise distinct inner_join full_join bind_rows mutate mutate_if
+#' @importFrom dplyr group_by select all_of summarise distinct inner_join full_join bind_rows mutate mutate_if case_when
 #' @importFrom readxl excel_sheets read_excel
 #' @importFrom utils txtProgressBar setTxtProgressBar
 #'
@@ -186,11 +186,16 @@ msmt_read_data <- function(data_locations,
                                return(outputs)
                              })
 
-  temp_data_wide_0 <- lapply(temp_list_data_2,
+  temp_data_wide_0_0 <- lapply(temp_list_data_2,
                            function(x){
                              x[["data_wide"]]
                            }) %>%
-    bind_rows() %>%
+    bind_rows()
+
+  is_logical <- lapply(temp_data_wide_0_0, function(x){sum(c("TRUE", "FALSE") %in% x) > 0}) %>% unlist()
+
+  temp_data_wide_0 <- temp_data_wide_0_0 %>%
+    mutate_if(is_logical, as.logical) %>%
     mutate_if(is_msmt_var(names(.)), as.numeric)
 
   id_vec_filt_0 <- id_vec[id_vec %in% colnames(temp_data_wide_0)]
