@@ -18,7 +18,9 @@
 
 msmt_addresses <- function(NUTS3 = "all"){
 
-  set_utf8()
+  if(R.Version()$major < 4){
+    set_utf8()
+  }
 
   NUTS3_all <- c("CZ010", "CZ020", "CZ031",
                  "CZ032", "CZ041", "CZ042",

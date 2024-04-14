@@ -4,14 +4,14 @@
 #' @param years A numeric or a character vector with requested years in format YYYY, defaults to the range 2015-2022
 #' @return A named vector containing the temp directory locations of every successfully downloaded file
 #' @examples
-#' data_locations <- msmt_download_data(form = "S01", years = 2015:2022)
+#' data_locations <- msmt_download_data(form = "S01", years = 2015:2023)
 #'
 #' @importFrom utils download.file txtProgressBar setTxtProgressBar
 #'
 #' @export
 
 msmt_download_data <- function(form,
-                               years = 2015:2022){
+                               years = 2015:2023){
 
   if(!(is.character(form) & (length(form) == 1))){
     warning("Argument form must be a single character")

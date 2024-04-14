@@ -10,7 +10,8 @@ msmt_coordinates(
   RUIAN_vars = c("RedRUAINKod", "MistoRUAINKod"),
   address_vars = list(RedRUAINKod = c("RedAdresa1", "RedAdresa2", "RedAdresa3"),
     MistoRUAINKod = c("MistoAdresa1", "MistoAdresa2", "MistoAdresa3")),
-  append = TRUE
+  append = TRUE,
+  complete = TRUE
 )
 }
 \arguments{
@@ -21,6 +22,8 @@ msmt_coordinates(
 \item{address_vars}{A named list consisting of character vector, each named as one of the RUIAN code variable. The character vectors consist of names of variable(s) containing addresses or their parts}
 
 \item{append}{Should the output be appended to the input data? Default is TRUE.}
+
+\item{complete}{Search for additional regional identifiers? Performed by finding intersections with municipality polygons.}
 }
 \value{
 Set of variables, with names starting with the RUIAN code variable names and appended with \code{"_X", "_Y", "_source"}. Each row corresponds the the rows of the original dataset.

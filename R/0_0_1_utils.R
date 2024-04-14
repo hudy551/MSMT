@@ -26,23 +26,19 @@ set_utf8 <- function(){
 #'
 #' @export
 
-
 is_long <- function(data,
                     id_vec){
 
-  if(all(id_vec %in% colnames(data))){
+  id_vec_filt <- id_vec[id_vec %in% colnames(data)]
 
-    outputs <- data %>%
-      group_by(select(data, all_of(id_vec))) %>%
-      summarise(cnt = n(),.groups = "drop") %>%
-      select(all_of("cnt")) %>%
-      distinct() %>%
-      nrow() %>%
-      `!=`(1)
+  outputs <- data %>%
+    group_by(select(data, all_of(id_vec_filt))) %>%
+    summarise(cnt = n(),.groups = "drop") %>%
+    select(all_of("cnt")) %>%
+    distinct() %>%
+    nrow() %>%
+    `!=`(1)
 
-  }else{
-    outputs <- TRUE
-  }
   return(outputs)
 }
 

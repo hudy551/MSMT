@@ -13,6 +13,7 @@
 #' @param data_addresses Output of \code{msmt_addresses}, or a data frame, containing variables with RUIAN codes and/or addresses
 #' @param RUIAN_vars A character vector, containing the names of one or more variables with RUIAN codes of locations. Defaults to the names in \code{msmt_addresses} output
 #' @param address_vars A named list consisting of character vector, each named as one of the RUIAN code variable. The character vectors consist of names of variable(s) containing addresses or their parts
+#' @param complete Search for additional regional identifiers? Performed by finding intersections with municipality polygons.
 #' @param append Should the output be appended to the input data? Default is TRUE.
 #'
 #' @return Set of variables, with names starting with the RUIAN code variable names and appended with \code{"_X", "_Y", "_source"}. Each row corresponds the the rows of the original dataset.
@@ -24,10 +25,10 @@
 #'
 #' @importFrom dplyr as_tibble select all_of bind_rows mutate mutate_all rename everything filter distinct group_by ungroup left_join n right_join arrange
 #' @importFrom utils txtProgressBar setTxtProgressBar unzip read.csv
-#' @importFrom RCzechia geocode zip_codes
+#' @importFrom RCzechia geocode zip_codes obce_polygony casti
 #' @importFrom tibble tibble
 #' @importFrom tidyr unnest_wider
-#' @importFrom sf st_centroid st_crs st_as_sf st_transform
+#' @importFrom sf st_centroid st_crs st_crs<- st_as_sf st_transform st_as_sf st_intersects
 #' @importFrom stats na.omit
 #'
 #' @export
@@ -40,7 +41,8 @@ msmt_coordinates <- function(data_addresses,
                                                 MistoRUAINKod = c("MistoAdresa1",
                                                                   "MistoAdresa2",
                                                                   "MistoAdresa3")),
-                             append = TRUE){
+                             append = TRUE,
+                             complete = TRUE){
 
   if(!is.data.frame(data_addresses)){
     stop("Data addresses must be a data frame")
@@ -73,10 +75,14 @@ msmt_coordinates <- function(data_addresses,
 
   temp_loc <- paste0(temp_dir,"\\ruj.zip")
 
+  options(timeout = 360)
+
   download.file(destfile = temp_loc,
                 url = ruj_url,
                 quiet = TRUE,
                 mode = "wb")
+
+  options(timeout = 60)
 
   temp_files <- unzip(temp_loc,
                       exdir = temp_dir)
@@ -90,7 +96,10 @@ msmt_coordinates <- function(data_addresses,
 
   data_ruian <- lapply(seq_along(temp_files),
                        function(x){
-                         temp_data <- read.csv(temp_files[x], sep = ";")
+
+                         writeLines(iconv(readLines(temp_files[x]), from = "windows-1250", to = "UTF-8"), file(temp_files[x], encoding = "UTF-8"))
+
+                         temp_data <- read.csv(temp_files[x], sep = ";", encoding = "UTF-8")
 
                          temp_data <- temp_data[temp_data[,"K\u00F3d.ADM"] %in% ruj_codes,] %>%
                            as_tibble()
@@ -159,13 +168,18 @@ msmt_coordinates <- function(data_addresses,
       lapply(function(x){x[1,]}) %>%
       bind_rows()
 
-    data_RCzechia <- data_RCzechia_0 %>%
+    data_RCzechia_1 <- data_RCzechia_0 %>%
       as_tibble() %>%
       mutate(temp_id = addresses$temp_id) %>%
-      filter(!is.na(.data$result)) %>%
-      unnest_wider(all_of("geometry"), names_sep = c("long", "lat")) %>%
-      rename(X = .data$geometrylong1,
-             Y = .data$geometrylat2) %>%
+      filter(!is.na(.data$result))
+
+    data_RCzechia <- data_RCzechia_1$geometry %>%
+      unlist() %>%
+      matrix(ncol = 2, byrow = TRUE) %>%
+      `colnames<-`(c("X", "Y")) %>%
+      as_tibble() %>%
+      bind_cols(data_RCzechia_1 %>%
+                  select(-geometry)) %>%
       select(all_of(c("temp_id", "X", "Y"))) %>%
       mutate(source = "2_RCZgeocode")
 
@@ -186,18 +200,21 @@ msmt_coordinates <- function(data_addresses,
 
     temp_zip <- RCzechia::zip_codes()
 
-    data_zip <- addresses_2 %>%
+    data_zip_0 <- addresses_2 %>%
       filter(is.na(data_tidygeocoder$X)) %>%
       mutate(PSC = gsub(".*([0-9]{5}).*", "\\1", .data$value) %>%
                ifelse(grepl("^[0-9]{5}$", .), ., NA)) %>%
       na.omit() %>%
       left_join(temp_zip, "PSC") %>%
-      mutate(geometry = sf::st_centroid(.data$geometry)) %>%
-      unnest_wider(all_of("geometry"), names_sep = c("long", "lat")) %>%
-      rename(X = .data$geometrylong1,
-             Y = .data$geometrylat2) %>%
-      select(all_of(c("temp_id", "X", "Y"))) %>%
-      mutate(source = "4_RCZzipcode")
+      mutate(geometry = sf::st_centroid(.data$geometry))
+
+    data_zip <- data_zip_0$geometry %>%
+      unlist() %>%
+      matrix(ncol = 2, byrow = TRUE) %>%
+      `colnames<-`(c("X", "Y")) %>%
+      as_tibble() %>%
+      mutate(temp_id = data_zip_0$temp_id,
+             source = "4_RCZzipcode")
 
     addresses_completed <- bind_rows(data_RCzechia,
                                      data_tidygeocoder,
@@ -212,11 +229,12 @@ msmt_coordinates <- function(data_addresses,
       right_join(temp_addresses,
                  "temp_id") %>%
       select(all_of(c("ruj", "X", "Y", "source")))
+
   }
 
   data_crs <- sf::st_crs(data_RCzechia_0)
 
-  data_coords <- sf::st_as_sf(data_ruj %>%
+  data_coords_0 <- sf::st_as_sf(data_ruj %>%
                                 select(all_of(c("K\u00F3d.ADM",
                                                 "Sou\u0159adnice.Y",
                                                 "Sou\u0159adnice.X"))) %>%
@@ -226,11 +244,14 @@ msmt_coordinates <- function(data_addresses,
                               crs = 5513) %>%
     sf::st_transform(crs = data_crs) %>%
     as_tibble() %>%
-    distinct() %>%
-    unnest_wider(all_of("geometry"),
-                 names_sep = c("long", "lat")) %>%
-    `names<-`(c("ruj", "X", "Y")) %>%
-    mutate(ruj = as.character(.data$ruj)) %>%
+    distinct()
+
+  data_coords <- data_coords_0$geometry %>%
+    unlist() %>%
+    matrix(ncol = 2, byrow = TRUE) %>%
+    `colnames<-`(c("X", "Y")) %>%
+    as_tibble() %>%
+    mutate(ruj = as.character(data_coords_0[,1,drop = TRUE])) %>%
     mutate(source = "1_cuzk")
 
   if(!is.null(address_vars)){
@@ -261,6 +282,40 @@ msmt_coordinates <- function(data_addresses,
                                  `names<-`(paste0(RUIAN_vars[x], "_", c("X", "Y", "source")))
                              }) %>%
     bind_cols()
+
+  if(complete){
+    map_munip <- RCzechia::obce_polygony()
+    map_citypart <- RCzechia::casti()
+
+    map_all <- map_citypart %>%
+      left_join(map_munip %>%
+                  as_tibble() %>%
+                  select(-geometry)) %>%
+      bind_rows(map_munip %>%
+                  filter(!KOD_OBEC %in% map_citypart$KOD_OBEC))
+    map_points <- sf::st_as_sf(na.omit(data_coords),coords = c("X", "Y"))
+    sf::st_crs(map_points) <- sf::st_crs(map_all)
+
+    temp_intersects <- sf::st_intersects(map_points, map_all)
+
+    data_complete <- map_all %>%
+      as_tibble() %>%
+      select(-geometry) %>%
+      .[unlist(temp_intersects),] %>%
+      bind_cols(na.omit(data_coords) %>% select(ruj))
+
+    vec_ind <- c(1:nrow(data_complete)) %>%
+      `names<-`(data_complete$ruj)
+
+    temp_complete <- lapply(seq_along(temp_data_addresses),
+                            FUN = function(x){
+                              data_complete[vec_ind[temp_data_addresses[[x]]],] %>%
+                                `names<-`(paste0(RUIAN_vars[x], "_", names(.)))
+                            }) %>%
+      bind_cols()
+
+    temp_coordinates <- bind_cols(temp_complete)
+  }
 
 
   if(append){

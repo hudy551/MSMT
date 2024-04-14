@@ -43,6 +43,6 @@ A function to browse and select MSMT datasets
 }
 }
 \examples{
-\dontrun{form_tibble <- msmt_forms(what = "search", search_string = "znevÃ½hodnÄ›nÃ­")}
+\dontrun{form_tibble <- msmt_forms(what = "search", search_string = "znevýhodnění")}
 
 }

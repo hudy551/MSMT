@@ -27,7 +27,7 @@
 #' @importFrom utils txtProgressBar setTxtProgressBar
 #'
 #' @export
-
+#'
 msmt_read_data <- function(data_locations,
                            id_vec = c("red_izo",
                                       "izo",
@@ -51,7 +51,9 @@ msmt_read_data <- function(data_locations,
                              function(x){
                                ifelse(grepl("_", x),
                                       gsub(".+_|.+_0", "", x),
-                                      substr(x, nchar(x), nchar(x))) %>%
+                                      ifelse(grepl("^.+[0-9]{2}$", x),
+                                             "pyr",
+                                             substr(x, nchar(x), nchar(x)))) %>%
                                  tolower() %>%
                                  paste0("sheet_", .)
                              }
@@ -108,28 +110,33 @@ msmt_read_data <- function(data_locations,
 
                                  temp_msmt_vars_0_0 <- names(temp_data_list_wide[[1]])
                                  temp_msmt_vars_0 <- temp_msmt_vars_0_0[is_msmt_var(temp_msmt_vars_0_0)]
+                                 id_vec_filt_0 <- id_vec[id_vec %in% temp_msmt_vars_0_0]
 
                                  temp_data_wide <- temp_data_list_wide[[1]] %>%
-                                   select(all_of(c(id_vec, temp_msmt_vars_0)))
+                                   select(all_of(c(id_vec_filt_0, temp_msmt_vars_0)))
 
                                  temp_data_wide_ids <- temp_data_list_wide[[1]] %>%
                                    select(-all_of(temp_msmt_vars_0))
 
-                                 for(i in 2:length(temp_data_list_wide)){
+                                 if(length(temp_data_list_wide) > 1){
 
-                                   temp_msmt_vars_1_0 <- names(temp_data_list_wide[[i]])
-                                   temp_msmt_vars_1 <- temp_msmt_vars_1_0[is_msmt_var(temp_msmt_vars_1_0)]
+                                   for(i in 2:length(temp_data_list_wide)){
 
-                                   temp_data_add <- temp_data_list_wide[[i]] %>%
-                                     select(all_of(c(id_vec, temp_msmt_vars_1)))
+                                     temp_msmt_vars_1_0 <- names(temp_data_list_wide[[i]])
+                                     temp_msmt_vars_1 <- temp_msmt_vars_1_0[is_msmt_var(temp_msmt_vars_1_0)]
+                                     id_vec_filt_1 <- id_vec[id_vec %in% temp_msmt_vars_1_0]
 
-                                   temp_data_wide <- full_join(temp_data_wide,
-                                                                       temp_data_add,
-                                                                       id_vec)
+                                     temp_data_add <- temp_data_list_wide[[i]] %>%
+                                       select(all_of(c(id_vec, temp_msmt_vars_1)))
 
-                                   temp_data_wide_ids <- bind_rows(temp_data_wide_ids,
-                                                                   temp_data_list_wide[[i]] %>%
-                                                                     select(-all_of(temp_msmt_vars_1)))
+                                     temp_data_wide <- full_join(temp_data_wide,
+                                                                 temp_data_add,
+                                                                 id_vec)
+
+                                     temp_data_wide_ids <- bind_rows(temp_data_wide_ids,
+                                                                     temp_data_list_wide[[i]] %>%
+                                                                       select(-all_of(temp_msmt_vars_1)))
+                                   }
                                  }
 
                                  outputs$data_wide <- temp_data_wide
@@ -148,16 +155,24 @@ msmt_read_data <- function(data_locations,
                                                                 style = 3)
                                setTxtProgressBar(progress_bar_2, progress_2)
 
+                               if(length(outputs) == 0){
+                                 outputs = list()
+                               }
 
                                return(outputs)
                              })
 
-  temp_data_wide <- lapply(temp_list_data_2,
+  temp_data_wide_0 <- lapply(temp_list_data_2,
                            function(x){
                              x[["data_wide"]]
                            }) %>%
     bind_rows() %>%
     mutate_if(is_msmt_var(names(.)), as.numeric)
+
+  id_vec_filt_0 <- id_vec[id_vec %in% colnames(temp_data_wide_0)]
+
+  temp_data_wide <- temp_data_wide_0 %>%
+    select(all_of(id_vec_filt_0), everything())
 
   temp_data_wide_ids <- lapply(temp_list_data_2,
                                function(x){

@@ -4,7 +4,7 @@
 \alias{msmt_download_data}
 \title{Downloads and creates local copies of requested MSMT data}
 \usage{
-msmt_download_data(form, years = 2015:2022)
+msmt_download_data(form, years = 2015:2023)
 }
 \arguments{
 \item{form}{String, indicating the id of a required form. See variable \code{form} in a tibble returned by \code{msmt_forms()}.}
@@ -18,6 +18,6 @@ A named vector containing the temp directory locations of every successfully dow
 Downloads and creates local copies of requested MSMT data
 }
 \examples{
-data_locations <- msmt_download_data(form = "S01", years = 2015:2022)
+data_locations <- msmt_download_data(form = "S01", years = 2015:2023)
 
 }
