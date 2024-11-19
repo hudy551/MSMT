@@ -14,9 +14,10 @@
 #' @examples
 #' data_addresses <- msmt_addresses(NUTS3 = "CZ010")
 #' data_addresses_wcoord <- msmt_coordinates(data_addresses)
+#' data_addresses_wcoord <- na.omit(data_addresses_wcoord[,c("red_izo", "RedRUAINKod_geometry")])
 #' id <- data_addresses_wcoord$red_izo
-#' X <- data_addresses_wcoord$RedRUAINKod_X
-#' Y <- data_addresses_wcoord$RedRUAINKod_Y
+#' X <- unlist(data_addresses_wcoord$RedRUAINKod_geometry)[c(TRUE,FALSE)]
+#' Y <- unlist(data_addresses_wcoord$RedRUAINKod_geometry)[c(FALSE,TRUE)]
 #' dmat <- msmt_distances(id = id, X = X, Y = Y)
 #'
 #' @importFrom tibble tibble

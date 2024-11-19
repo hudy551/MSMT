@@ -13,11 +13,16 @@
 #' @param data_addresses Output of \code{msmt_addresses}, or a data frame, containing variables with RUIAN codes and/or addresses
 #' @param RUIAN_vars A character vector, containing the names of one or more variables with RUIAN codes of locations. Defaults to the names in \code{msmt_addresses} output
 #' @param address_vars A named list consisting of character vector, each named as one of the RUIAN code variable. The character vectors consist of names of variable(s) containing addresses or their parts
+#' @param id_var A string indicating the name of the variable containing the identifier of school, defaults to "red_izo"
 #' @param complete Search for additional regional identifiers? Performed by finding intersections with municipality polygons.
 #' @param append Should the output be appended to the input data? Default is TRUE.
+#' @param scrape Should scraping the web of CUZK be included in the search for missing coordinates?
+#' @param res Add locations of providers from the Business register (RES)?
+#' @param timeout Increases timeout for dowloads with options(timeout = timeout) in order to allow the download of the RUIAN database. Defaults to 360, to skip, set value to NULL.
 #'
-#' @return Set of variables, with names starting with the RUIAN code variable names and appended with \code{"_X", "_Y", "_source"}. Each row corresponds the the rows of the original dataset.
-#' Variables ending with "_X" and "_Y" indicate coordinates (crs = 5513). Variables ending with "_source" indicate the database from which the coordinates were obtained.
+#' @return Set of variables, with names starting with the RUIAN code variable names and appended with \code{"_geometry", "_source"}. Each row corresponds the the rows of the original dataset.
+#' Variables ending with "_geometry" indicate coordinates (crs = 5513). Variables ending with "_source" indicate the database from which the coordinates were obtained. If \code{complete = TRUE},
+#' more vatiables with regional identifiers are also included, akin to the \code{RCzechia} package objects.
 #'
 #' @examples
 #' data_addresses <- msmt_addresses(NUTS3 = "CZ010")
@@ -41,8 +46,12 @@ msmt_coordinates <- function(data_addresses,
                                                 MistoRUAINKod = c("MistoAdresa1",
                                                                   "MistoAdresa2",
                                                                   "MistoAdresa3")),
+                             id_var = "red_izo",
+                             scrape = FALSE,
                              append = TRUE,
-                             complete = TRUE){
+                             complete = TRUE,
+                             res = FALSE,
+                             timeout = 360){
 
   if(!is.data.frame(data_addresses)){
     stop("Data addresses must be a data frame")
@@ -56,7 +65,11 @@ msmt_coordinates <- function(data_addresses,
     )
   }
 
+# Prepare addresses -------------------------------------------------
+
   data_addresses <- as_tibble(data_addresses)
+
+# Find variables with RUIAN codes and formulate unique substitutes for NA values
 
   var_marks <- RUIAN_vars %>%
     substr(., 1, 1) %>%
@@ -67,7 +80,10 @@ msmt_coordinates <- function(data_addresses,
     temp_vec <- data_addresses[,RUIAN_vars[x],drop = TRUE]
     temp_ind <- 1:length(temp_vec)
     return_vec <- ifelse(is.na(temp_vec), paste0(var_marks[x], temp_ind), temp_vec)
-  })
+  }) %>%
+    `names<-`(var_marks)
+
+# Download RUIAN database -------------------------------------------------
 
   ruj_url <- MSMT:::ruj
 
@@ -75,24 +91,27 @@ msmt_coordinates <- function(data_addresses,
 
   temp_loc <- paste0(temp_dir,"\\ruj.zip")
 
-  options(timeout = 360)
+  old_timeout <- getOption("timeout")
+  options(timeout = timeout)
 
   download.file(destfile = temp_loc,
                 url = ruj_url,
                 quiet = TRUE,
                 mode = "wb")
 
-  options(timeout = 60)
+  options(timeout = old_timeout)
 
   temp_files <- unzip(temp_loc,
                       exdir = temp_dir)
+
+  # All RUIAN codes
 
   ruj_codes <- unlist(temp_data_addresses) %>%
     unique()
 
   total_1 <- length(temp_files)
 
-  cat("\n\nReading RUIAN data [1/4]\n\n")
+  cat("\n\nReading RUIAN data [1/5]\n\n")
 
   data_ruian <- lapply(seq_along(temp_files),
                        function(x){
@@ -117,15 +136,125 @@ msmt_coordinates <- function(data_addresses,
   lghts <- lapply(data_ruian, nrow) %>%
     unlist()
 
+# Data with coordinates for codes contained in the original data
+
   data_ruj <- data_ruian[lghts!=0] %>%
     bind_rows()
 
-  if(!is.null(address_vars)){
-    missing_ruj <- lapply(temp_data_addresses, function(x){!x %in% unlist(data_ruj[,"K\u00F3d.ADM"])})
+# Find addresses missing in the database ----------------------------------
 
-    temp_addresses <- lapply(seq_along(missing_ruj),
+  found_codes <- data_ruj[,c("K\u00F3d.ADM", "Sou\u0159adnice.X", "Sou\u0159adnice.Y")] %>%
+    `colnames<-`(c("RUIAN", "X", "Y")) %>%
+    mutate_all(as.character) %>%
+    mutate(source = "1_cuzk") %>%
+    na.omit()
+
+  missing_codes <- ruj_codes[!ruj_codes %in% found_codes$RUIAN]
+
+# Find addresses with CUZK scraper ----------------------------------------
+
+  missing_codes_scrape <- missing_codes[grepl("^[0-9]+", missing_codes)]
+
+  cat("\n\nFinding coordinates by scraping https://vdp.cuzk.cz/vdp/ruian [2/5]\n\n")
+  if(scrape){
+    total_2 <- length(missing_codes_scrape)
+
+    progress_bar_2 <- txtProgressBar(min = 0,
+                                     max = total_2,
+                                     style = 3)
+
+    found_codes_scrape <- seq_along(missing_codes_scrape) %>%
+      lapply(function(x){
+
+        setTxtProgressBar(progress_bar_2, x)
+
+        temp_RUIAN <- missing_codes_scrape[x]
+
+        url_lines <- paste0(c("https://vdp.cuzk.cz/vdp/ruian/adresnimista/",
+                              "https://vdp.cuzk.cz/vdp/ruian/stavebniobjekty/"),
+                            temp_RUIAN)
+
+        mark <- TRUE
+        y <- 1
+
+        while (mark) {
+          get_lines <- tryCatch({readLines(url_lines[y],warn = FALSE)},
+                                error = function(e){return("MISS")},
+                                warning = function(e){return("MISS")})
+
+          Sys.sleep(.5)
+
+          len_mark <- length(get_lines)
+          mark <- (len_mark == 1) & y < 2
+          y <- y + 1
+        }
+
+        if(len_mark > 1){
+          if(sum(grepl("Y:.+X:", get_lines))>0){
+            temp_line <- get_lines[grepl("Y:.+X:", get_lines)]
+
+            temp_line_x <- gsub(".+X:([ 0-9,]+).+", "\\1", temp_line) %>%
+              gsub(",", ".", .) %>%
+              gsub(" ", "", .)
+
+            temp_line_y <- gsub(".+Y:([ 0-9,]+).+", "\\1", temp_line) %>%
+              gsub(",", ".", .) %>%
+              gsub(" ", "", .)
+
+            result <- tibble(RUIAN = temp_RUIAN,
+                             X = temp_line_x,
+                             Y = temp_line_y)
+          }else{
+            result <- tibble(RUIAN = temp_RUIAN,
+                             X = NA,
+                             Y = NA)
+          }
+        }else{
+
+          result <- tibble(RUIAN = temp_RUIAN,
+                           X = NA,
+                           Y = NA)
+        }
+        return(result)
+      }) %>%
+      bind_rows() %>%
+      na.omit()
+
+    found_codes <- found_codes %>%
+      bind_rows(found_codes_scrape %>%
+                  mutate(source = "2_cuzk_scrape")) %>%
+      distinct()
+  }else{
+    cat("\n\nSkipping\n\n")
+  }
+
+  found_codes <- found_codes %>%
+    sf::st_as_sf(coords = c("X", "Y"),
+                 agr = "constant",
+                 crs = 5513) %>%
+    sf::st_transform(crs = "EPSG:4326") %>%
+    as_tibble() %>%
+    distinct()
+
+  missing_codes <- ruj_codes[!ruj_codes %in% found_codes$RUIAN]
+
+# Geocode with RCZechia ---------------------------------------------------
+
+
+  if(!is.null(address_vars)){
+
+  #Prepare address strings
+
+    temp_addresses <- lapply(seq_along(address_vars),
                              function(x){
-                               data_addresses[missing_ruj[[x]], address_vars[[x]]] %>%
+                               temp_vars <- c(RUIAN_vars[[x]], address_vars[[x]])
+
+                               temp_data <- data_addresses %>%
+                                 select(all_of(temp_vars)) %>%
+                                 `colnames<-`(c("RUIAN", paste0("a", seq_along(address_vars[[x]]))))
+
+                               output_data <- temp_data %>%
+                                 select(-RUIAN) %>%
                                  mutate_all(function(z){
                                    gsub("( |^)([0-9]{3}) ([0-9]{2})( |$)", " \\2\\3 ", z) %>%
                                      gsub(" $|^ ", "", .)
@@ -136,152 +265,98 @@ msmt_coordinates <- function(data_addresses,
                                  gsub(" $|^ ", "", .) %>%
                                  gsub("  ", " ", .) %>%
                                  as_tibble_col() %>%
-                                 mutate(ruj = temp_data_addresses[[x]][missing_ruj[[x]]])
+                                 mutate(RUIAN = temp_data_addresses[[x]])
                              }) %>%
       bind_rows() %>%
       distinct() %>%
-      group_by(.data$value) %>%
-      mutate(temp_id = .data$ruj[1]) %>%
-      ungroup()
+      filter(RUIAN %in% missing_codes)
 
-    addresses <- temp_addresses %>%
-      select(-all_of("ruj")) %>%
+    cat("\n\nFinding geocodes with RCzechia [3/5]\n\n")
+
+    total_3 <- length(temp_addresses$value)
+
+    progress_bar_3 <- txtProgressBar(min = 0,
+                                     max = total_3,
+                                     style = 3)
+
+    found_RCzechia <- lapply(seq_along(temp_addresses$value),
+                       function(x){
+                         suppressMessages(output <- RCzechia::geocode(temp_addresses$value[x]))
+
+                         setTxtProgressBar(progress_bar_3, x)
+                         return(output[1,])
+                       }) %>%
+      bind_rows() %>%
+      mutate(RUIAN = temp_addresses$RUIAN) %>%
+      na.omit() %>%
+      as_tibble() %>%
+      select(RUIAN, geometry) %>%
+      mutate(source = "3_RCzechia")
+
+    found_codes <- found_codes %>%
+      bind_rows(found_RCzechia) %>%
       distinct()
 
-    total_2 <- length(addresses$value)
+    cat("\n\nFinding geocodes with tidygeocoder [4/5]\n\n")
 
-    cat("\n\nFinding geocodes with RCzechia [2/4]\n\n")
-
-    geocodes <- lapply(seq_along(addresses$value),
-                       function(x){
-                         suppressMessages(output <- RCzechia::geocode(addresses$value[x]))
-
-                         progress_bar_2 <- txtProgressBar(min = 0,
-                                                          max = total_2,
-                                                          style = 3)
-                         progress <- x
-                         setTxtProgressBar(progress_bar_2, progress)
-                         return(output)
-                       })
-
-    data_RCzechia_0 <- geocodes %>%
-      lapply(function(x){x[1,]}) %>%
-      bind_rows()
-
-    data_RCzechia_1 <- data_RCzechia_0 %>%
-      as_tibble() %>%
-      mutate(temp_id = addresses$temp_id) %>%
-      filter(!is.na(.data$result))
-
-    data_RCzechia <- data_RCzechia_1$geometry %>%
-      unlist() %>%
-      matrix(ncol = 2, byrow = TRUE) %>%
-      `colnames<-`(c("X", "Y")) %>%
-      as_tibble() %>%
-      bind_cols(data_RCzechia_1 %>%
-                  select(-geometry)) %>%
-      select(all_of(c("temp_id", "X", "Y"))) %>%
-      mutate(source = "2_RCZgeocode")
-
-    addresses_2 <- addresses %>%
-      filter(is.na(data_RCzechia_0$result))
-
-    cat("\n\nFinding geocodes with tidygeocoder [3/4]\n\n")
-
-    data_tidygeocoder <- addresses_2 %>%
-      mutate(country = "Czech Republic") %>%
+    found_tidygeocoder <- temp_addresses %>%
+      filter(!RUIAN %in% found_codes$RUIAN) %>%
+      mutate(value = paste0(value, " Czech Republic")) %>%
       tidygeocoder::geocode(address = "value") %>%
-      rename(X = .data$long,
-             Y = .data$lat) %>%
-      select(all_of(c("temp_id", "X", "Y"))) %>%
-      mutate(source = "3_TIDYgeocode")
-
-    cat("\n\nMatching zip codes [4/4]\n\n")
-
-    temp_zip <- RCzechia::zip_codes()
-
-    data_zip_0 <- addresses_2 %>%
-      filter(is.na(data_tidygeocoder$X)) %>%
-      mutate(PSC = gsub(".*([0-9]{5}).*", "\\1", .data$value) %>%
-               ifelse(grepl("^[0-9]{5}$", .), ., NA)) %>%
+      select(RUIAN, long, lat) %>%
+      `names<-`(c("RUIAN", "X", "Y")) %>%
+      mutate(source = "4_tidygeocoder") %>%
       na.omit() %>%
-      left_join(temp_zip, "PSC") %>%
-      mutate(geometry = sf::st_centroid(.data$geometry))
+      sf::st_as_sf(coords = c("X", "Y"),
+                   crs = "EPSG:4326")
 
-    data_zip <- data_zip_0$geometry %>%
-      unlist() %>%
-      matrix(ncol = 2, byrow = TRUE) %>%
-      `colnames<-`(c("X", "Y")) %>%
-      as_tibble() %>%
-      mutate(temp_id = data_zip_0$temp_id,
-             source = "4_RCZzipcode")
+    found_codes <- found_codes %>%
+      bind_rows(found_tidygeocoder) %>%
+      distinct()
 
-    addresses_completed <- bind_rows(data_RCzechia,
-                                     data_tidygeocoder,
-                                     data_zip) %>%
+    cat("\n\nMatching zip codes [5/5]\n\n")
+
+    found_zip <- temp_addresses %>%
+      filter(!RUIAN %in% found_codes$RUIAN) %>%
+      filter(grepl("[0-9]{5}", value)) %>%
+      mutate(value = gsub(".*([0-9]{5}.*)", "\\1", value),
+             value = gsub("[^ ]+\\.|[^ ]+,", "", value),
+             value = gsub("[ ]+", " ", value),
+             value = paste0(value, ", Czech Republic")) %>%
+      tidygeocoder::geocode(address = "value") %>%
+      select(RUIAN, long, lat) %>%
+      `names<-`(c("RUIAN", "X", "Y")) %>%
+      mutate(source = "5_tidygeocoderzip") %>%
       na.omit() %>%
-      distinct() %>%
-      group_by(.data$temp_id) %>%
-      mutate(mark = 1:n()) %>%
-      filter(.data$mark == 1) %>%
-      select(-all_of("mark")) %>%
-      ungroup() %>%
-      right_join(temp_addresses,
-                 "temp_id") %>%
-      select(all_of(c("ruj", "X", "Y", "source")))
+      sf::st_as_sf(coords = c("X", "Y"),
+                   crs = "EPSG:4326")
 
+    found_codes <- found_codes %>%
+      bind_rows(found_zip) %>%
+      distinct()
+
+  }else{
+    cat("\n\nNo address variables specified\n\n")
   }
 
-  data_crs <- sf::st_crs(data_RCzechia_0)
+  found_codes <- found_codes %>%
+    group_by(RUIAN) %>%
+    filter(1:n() == 1) %>%
+    ungroup()
 
-  data_coords_0 <- sf::st_as_sf(data_ruj %>%
-                                select(all_of(c("K\u00F3d.ADM",
-                                                "Sou\u0159adnice.Y",
-                                                "Sou\u0159adnice.X"))) %>%
-                                na.omit(),
-                              coords = c("Sou\u0159adnice.X", "Sou\u0159adnice.Y"),
-                              agr = "constant",
-                              crs = 5513) %>%
-    sf::st_transform(crs = data_crs) %>%
-    as_tibble() %>%
-    distinct()
-
-  data_coords <- data_coords_0$geometry %>%
-    unlist() %>%
-    matrix(ncol = 2, byrow = TRUE) %>%
-    `colnames<-`(c("X", "Y")) %>%
-    as_tibble() %>%
-    mutate(ruj = as.character(data_coords_0[,1,drop = TRUE])) %>%
-    mutate(source = "1_cuzk")
-
-  if(!is.null(address_vars)){
-    data_coords <- data_coords %>%
-      bind_rows(addresses_completed) %>%
-      arrange(.data$source) %>%
-      group_by(.data$ruj, .data$source) %>%
-      mutate(source = .data$source[1]) %>%
-      ungroup()
-  }
-
-  data_coords <- distinct(data_coords)
-
-  temp_x <- data_coords$X %>%
-    `names<-`(data_coords$ruj)
-  temp_y <- data_coords$Y %>%
-    `names<-`(data_coords$ruj)
-  temp_source <- data_coords$source %>%
-    `names<-`(data_coords$ruj)
-
-  temp_coordinates <- lapply(seq_along(temp_data_addresses),
+  temp_coordinates <- lapply(seq_along(RUIAN_vars),
                              FUN = function(x){
-                               tibble(X = temp_x[temp_data_addresses[[x]]],
-                                      Y = temp_y[temp_data_addresses[[x]]],
-                                      source = temp_source[temp_data_addresses[[x]]]
-                               ) %>%
-                                 mutate(source = ifelse(is.na(.data$source), "5_failed", .data$source)) %>%
-                                 `names<-`(paste0(RUIAN_vars[x], "_", c("X", "Y", "source")))
-                             }) %>%
+                               data_addresses %>%
+                                 left_join(found_codes %>%
+                                             `names<-`(c(RUIAN_vars[x],
+                                                         paste0(RUIAN_vars[x], "_source"),
+                                                         paste0(RUIAN_vars[x], "_geometry"))
+                                                       ), by = RUIAN_vars[x]) %>%
+                                 select(starts_with(RUIAN_vars[x]))}) %>%
     bind_cols()
+
+  temp_coordinates[,grepl("source", names(temp_coordinates))] <- temp_coordinates[,grepl("source", names(temp_coordinates))] %>%
+    mutate_all(function(x){ifelse(is.na(x), "99_failed", x)})
 
   if(complete){
     map_munip <- RCzechia::obce_polygony()
@@ -292,8 +367,10 @@ msmt_coordinates <- function(data_addresses,
                   as_tibble() %>%
                   select(-geometry)) %>%
       bind_rows(map_munip %>%
-                  filter(!KOD_OBEC %in% map_citypart$KOD_OBEC))
-    map_points <- sf::st_as_sf(na.omit(data_coords),coords = c("X", "Y"))
+                  filter(!KOD_OBEC %in% map_citypart$KOD_OBEC)) %>%
+      mutate(KOD_ZUJ = ifelse(is.na(KOD), KOD_OBEC, KOD))
+
+    map_points <- sf::st_as_sf(found_codes)
     sf::st_crs(map_points) <- sf::st_crs(map_all)
 
     temp_intersects <- sf::st_intersects(map_points, map_all)
@@ -302,28 +379,57 @@ msmt_coordinates <- function(data_addresses,
       as_tibble() %>%
       select(-geometry) %>%
       .[unlist(temp_intersects),] %>%
-      bind_cols(na.omit(data_coords) %>% select(ruj))
+      bind_cols(na.omit(found_codes) %>% select(RUIAN))
 
-    vec_ind <- c(1:nrow(data_complete)) %>%
-      `names<-`(data_complete$ruj)
-
-    temp_complete <- lapply(seq_along(temp_data_addresses),
-                            FUN = function(x){
-                              data_complete[vec_ind[temp_data_addresses[[x]]],] %>%
-                                `names<-`(paste0(RUIAN_vars[x], "_", names(.)))
-                            }) %>%
+    temp_locations <- lapply(seq_along(RUIAN_vars),
+                               FUN = function(x){
+                                 data_addresses %>%
+                                   left_join(data_complete %>%
+                                               `names<-`(ifelse(names(.) == "RUIAN", RUIAN_vars[x], paste0(RUIAN_vars[x], "_", names(.)))
+                                               ), by = RUIAN_vars[x]) %>%
+                                   select(starts_with(RUIAN_vars[x]))}) %>%
       bind_cols()
 
-    temp_coordinates <- bind_cols(temp_coordinates,
-                                  temp_complete)
+    temp_coordinates <- temp_coordinates %>%
+      bind_cols(temp_locations %>%
+                  select(-matches(paste0("^", RUIAN_vars, "$", collapse = "|"))))
+
   }
 
+  if(res){
+
+    cat("\n\nDownloading the Business register (RES)\n\n")
+
+    old_timeout <- getOption("timeout")
+    options(timeout = timeout)
+
+    data_RES <- read.csv(MSMT:::res)
+
+    options(timeout = old_timeout)
+
+    data_RES_zriz <- data_RES %>%
+      select(ZrizICO = ICO, ZrizKOD_ZUJ = ICZUJ) %>%
+      filter(ZrizICO %in% data_addresses$ZrizICO) %>%
+      na.omit() %>%
+      mutate_all(as.character)
+
+    data_RES_schools <- data_RES %>%
+      select(ico = ICO, RES_KOD_ZUJ = ICZUJ) %>%
+      filter(ico %in% data_addresses$ico) %>%
+      na.omit() %>%
+      mutate_all(as.character)
+
+    data_addresses <- data_addresses %>%
+      left_join(data_RES_zriz) %>%
+      left_join(data_RES_schools)
+  }
 
   if(append){
     output <- data_addresses %>%
+      select(-all_of(RUIAN_vars)) %>%
       bind_cols(temp_coordinates)
   }else{
-    output <- data_addresses[,RUIAN_vars] %>%
+    output <- data_addresses[,id_var] %>%
       bind_cols(temp_coordinates)
   }
 

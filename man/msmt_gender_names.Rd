@@ -7,16 +7,19 @@
 msmt_gender_names(
   names_vec,
   match_char = "á$",
-  countries = c("CZ", "SK", "PL")
+  countries = c("CZ", "SK", "PL"),
+  timeout = 360
 )
 }
 \arguments{
 \item{names_vec}{A character vector containing full names (including surnames)}
 
-\item{match_char}{A character containing a regular expression indicating female. Default is a Czech ending letter "á".
-To ommit, use "YYYY", or some other regular expression that won't produce any match.}
+\item{match_char}{A character containing a regular expression indicating female. Default is a Czech ending letter for surnames "á".
+To omit, use "YYYY", or some other regular expression that won't produce any match.}
 
 \item{countries}{Country codes to be used in matching names from the database. Note that adding too many countries might result in a very long computation}
+
+\item{timeout}{Increases timeout for dowloads with options(timeout = timeout) in order to allow the download of the international names database. Defaults to 200, to skip, set value to NULL.}
 }
 \value{
 A tibble matching original names to guessed genders. Also includes variables indicating,

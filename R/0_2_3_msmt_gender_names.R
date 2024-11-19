@@ -6,9 +6,10 @@
 #' Martínez, G. L., de Juano-i-Ribes, H. S., Yin, D., Le Feuvre, B., Hamdan-Livramento, I., Saito, K., & Raffo, J. (2021). Expanding the World Gender-Name Dictionary: WGND 2.0.
 #'
 #' @param names_vec A character vector containing full names (including surnames)
-#' @param match_char A character containing a regular expression indicating female. Default is a Czech ending letter "á".
-#' To ommit, use "YYYY", or some other regular expression that won't produce any match.
+#' @param match_char A character containing a regular expression indicating female. Default is a Czech ending letter for surnames "á".
+#' To omit, use "YYYY", or some other regular expression that won't produce any match.
 #' @param countries Country codes to be used in matching names from the database. Note that adding too many countries might result in a very long computation
+#' @param timeout Increases timeout for dowloads with options(timeout = timeout) in order to allow the download of the international names database. Defaults to 200, to skip, set value to NULL.
 #'
 #' @return A tibble matching original names to guessed genders. Also includes variables indicating,
 #' how many names belonging to a gender in a given languages have been matched to the original name.
@@ -27,13 +28,23 @@
 
 msmt_gender_names <- function(names_vec,
                               match_char = "\u00E1$",
-                              countries = c("CZ", "SK", "PL")){
+                              countries = c("CZ", "SK", "PL"),
+                              timeout = 360){
 
   temp_file <- tempfile()
+
+  old_timeout <- getOption("timeout")
+
+  if(!is.null(timeout)){
+    options(timeout = timeout)
+  }
+
 
   download.file(MSMT:::name_data,
                 destfile = temp_file,
                 mode = "wb")
+
+  options(timeout = old_timeout)
 
   tab_names <- read.table(temp_file,
                           header = TRUE,
@@ -42,7 +53,7 @@ msmt_gender_names <- function(names_vec,
     mutate(expr = .data$name %>%
              paste0("^", ., "$|",
                     "^", ., " |",
-                    " ", .," |"))
+                    " ", .," "))
 
   temp_exprs <- lapply(countries,
                        function(x){

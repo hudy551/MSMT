@@ -9,6 +9,7 @@ msmt_forms(
   language = "cs",
   search_string = NULL,
   exact_match = TRUE,
+  use_utf_8 = FALSE,
   ...
 )
 }
@@ -20,6 +21,8 @@ msmt_forms(
 \item{search_string}{Optional. A perl regular expression containing a search term to use}
 
 \item{exact_match}{Should an exact match, or an approximate match be used if parameter \code{what = "search"}. Defaults to true.}
+
+\item{use_utf_8}{Set system locale to UTF-8? Used with older ersions of R.}
 
 \item{...}{Additional arguments that can be passed to \code{agrepl()} if \code{exact_match = FALSE}.}
 }

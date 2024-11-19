@@ -6,6 +6,7 @@
 #' @param language Language of output, currently available are Czech original ("cs") and english translation from DeepL ("en")
 #' @param search_string Optional. A perl regular expression containing a search term to use
 #' @param exact_match Should an exact match, or an approximate match be used if parameter \code{what = "search"}. Defaults to true.
+#' @param use_utf_8 Set system locale to UTF-8? Used with older ersions of R.
 #' @param ... Additional arguments that can be passed to \code{agrepl()} if \code{exact_match = FALSE}.
 #'
 #' @details
@@ -33,9 +34,10 @@ msmt_forms <- function(what = "forms",
                        language = "cs",
                        search_string = NULL,
                        exact_match = TRUE,
+                       use_utf_8 = FALSE,
                        ...){
 
-  if(language == "cs"){
+  if(language == "cs" & use_utf_8){
     MSMT::set_utf8()
   }
 

@@ -10,8 +10,12 @@ msmt_coordinates(
   RUIAN_vars = c("RedRUAINKod", "MistoRUAINKod"),
   address_vars = list(RedRUAINKod = c("RedAdresa1", "RedAdresa2", "RedAdresa3"),
     MistoRUAINKod = c("MistoAdresa1", "MistoAdresa2", "MistoAdresa3")),
+  id_var = "red_izo",
+  scrape = FALSE,
   append = TRUE,
-  complete = TRUE
+  complete = TRUE,
+  res = FALSE,
+  timeout = 360
 )
 }
 \arguments{
@@ -21,13 +25,22 @@ msmt_coordinates(
 
 \item{address_vars}{A named list consisting of character vector, each named as one of the RUIAN code variable. The character vectors consist of names of variable(s) containing addresses or their parts}
 
+\item{id_var}{A string indicating the name of the variable containing the identifier of school, defaults to "red_izo"}
+
+\item{scrape}{Should scraping the web of CUZK be included in the search for missing coordinates?}
+
 \item{append}{Should the output be appended to the input data? Default is TRUE.}
 
 \item{complete}{Search for additional regional identifiers? Performed by finding intersections with municipality polygons.}
+
+\item{res}{Add locations of providers from the Business register (RES)?}
+
+\item{timeout}{Increases timeout for dowloads with options(timeout = timeout) in order to allow the download of the RUIAN database. Defaults to 360, to skip, set value to NULL.}
 }
 \value{
-Set of variables, with names starting with the RUIAN code variable names and appended with \code{"_X", "_Y", "_source"}. Each row corresponds the the rows of the original dataset.
-Variables ending with "_X" and "_Y" indicate coordinates (crs = 5513). Variables ending with "_source" indicate the database from which the coordinates were obtained.
+Set of variables, with names starting with the RUIAN code variable names and appended with \code{"_geometry", "_source"}. Each row corresponds the the rows of the original dataset.
+Variables ending with "_geometry" indicate coordinates (crs = 5513). Variables ending with "_source" indicate the database from which the coordinates were obtained. If \code{complete = TRUE},
+more vatiables with regional identifiers are also included, akin to the \code{RCzechia} package objects.
 }
 \description{
 As no single method for finding coordinates is perfect, the function tries multiple sources in the following sequence:

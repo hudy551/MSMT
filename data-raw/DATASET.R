@@ -20,6 +20,7 @@ my_key <- "536d512c-2e60-8cda-fe63-e873327d8f71:fx"
 dsia <- "https://dsia.msmt.cz/vystupy/region/data/"
 rej <- "https://rejstriky.msmt.cz/opendata/"
 ruj <- "https://vdp.cuzk.cz/vymenny_format/csv/20220131_OB_ADR_csv.zip"
+res <- "https://opendata.czso.cz/data/od_org03/res_data.csv"
 name_data <- "https://dataverse.harvard.edu/api/access/datafile/4750348"
 
 if (.Platform$OS.type == "windows") {
@@ -55,7 +56,7 @@ if(as.numeric(format(Sys.time(), "%m")) < 10){
   this_year <- this_year - 1
 }
 
-dsia_list <- lapply(2015:this_year, function(z){
+dsia_list <- lapply(2015:this_year-1, function(z){
 
   data_dsia <- httr::GET(paste0("https://dsia.msmt.cz/vystupy/region/vu_region", z,".html")) %>%
     rvest::read_html() %>%
@@ -444,6 +445,7 @@ usethis::use_data(msmt_tables_cs,
                   dsia,
                   rej,
                   ruj,
+                  res,
                   name_data,
                   title_level,
                   title_area,

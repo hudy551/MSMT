@@ -32,7 +32,7 @@ Only read data belonging to one form at a time (e.g. any time range from form S0
 }
 }
 \examples{
-data_locations <- msmt_download_data(form = "M03", years = 2015:2022)
+data_locations <- msmt_download_data(form = "M03", years = 2015:2023)
 data_list <- msmt_read_data(data_locations = data_locations)
 
 }
