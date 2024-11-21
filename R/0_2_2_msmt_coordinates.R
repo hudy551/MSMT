@@ -146,6 +146,7 @@ msmt_coordinates <- function(data_addresses,
 
   found_codes <- data_ruj[,c("K\u00F3d.ADM", "Sou\u0159adnice.X", "Sou\u0159adnice.Y")] %>%
     `colnames<-`(c("RUIAN", "X", "Y")) %>%
+    filter(RUIAN %in% ruj_codes) %>%
     mutate_all(as.character) %>%
     mutate(source = "1_cuzk") %>%
     na.omit()
