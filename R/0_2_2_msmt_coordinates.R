@@ -120,7 +120,8 @@ msmt_coordinates <- function(data_addresses,
 
                          temp_data <- read.csv(temp_files[x], sep = ";", encoding = "UTF-8")
 
-                         temp_data <- temp_data[temp_data[,"K\u00F3d.ADM"] %in% ruj_codes,] %>%
+#                         temp_data <- temp_data[temp_data[,"K\u00F3d.ADM"] %in% ruj_codes,] %>%
+                         temp_data <- temp_data %>%
                            as_tibble()
 
                          progress_bar_1 <- txtProgressBar(min = 0,
@@ -408,16 +409,34 @@ msmt_coordinates <- function(data_addresses,
     options(timeout = old_timeout)
 
     data_RES_zriz <- data_RES %>%
-      select(ZrizICO = ICO, ZrizKOD_ZUJ = ICZUJ) %>%
+      mutate(ICO = substr(1e8+ICO, 2,9)) %>%
+      select(ZrizICO = ICO, ZrizKOD_ZUJ = ICZUJ, ZrizKOD_RUIAN = KODADM) %>%
       filter(ZrizICO %in% data_addresses$ZrizICO) %>%
       na.omit() %>%
-      mutate_all(as.character)
+      mutate_all(as.character) %>%
+      left_join(data_ruj %>%
+                  select(all_of(c("K\u00F3d.ADM",
+                                  "K\u00F3d.obce",
+                                  "Sou\u0159adnice.X",
+                                  "Sou\u0159adnice.Y"))) %>%
+                  `names<-`(c("ZrizKOD_RUIAN", "ZrizKOD_OBEC","Zriz_X","Zriz_Y")) %>%
+                  mutate(ZrizKOD_RUIAN = as.character(ZrizKOD_RUIAN)),
+                "ZrizKOD_RUIAN")
 
     data_RES_schools <- data_RES %>%
-      select(ico = ICO, RES_KOD_ZUJ = ICZUJ) %>%
+      mutate(ICO = substr(1e8+ICO, 2,9)) %>%
+      select(ico = ICO, RES_KOD_ZUJ = ICZUJ, RES_KOD_RUIAN = KODADM) %>%
       filter(ico %in% data_addresses$ico) %>%
       na.omit() %>%
-      mutate_all(as.character)
+      mutate_all(as.character) %>%
+      left_join(data_ruj %>%
+                  select(all_of(c("K\u00F3d.ADM",
+                                  "K\u00F3d.obce",
+                                  "Sou\u0159adnice.X",
+                                  "Sou\u0159adnice.Y"))) %>%
+                  `names<-`(c("RES_KOD_RUIAN", "RES_KOD_OBEC","RES_X","RES_Y")) %>%
+                  mutate(RES_KOD_RUIAN = as.character(RES_KOD_RUIAN)),
+                "RES_KOD_RUIAN")
 
     data_addresses <- data_addresses %>%
       left_join(data_RES_zriz) %>%
