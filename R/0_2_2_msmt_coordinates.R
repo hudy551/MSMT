@@ -67,7 +67,8 @@ msmt_coordinates <- function(data_addresses,
 
 # Prepare addresses -------------------------------------------------
 
-  data_addresses <- as_tibble(data_addresses)
+  data_addresses <- as_tibble(data_addresses) %>%
+    mutate(ZrizICO = ifelse(nchar(ZrizICO) == 10, substr(ZrizICO,1,8), ZrizICO))
 
 # Find variables with RUIAN codes and formulate unique substitutes for NA values
 
