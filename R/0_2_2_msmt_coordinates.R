@@ -339,6 +339,15 @@ msmt_coordinates <- function(data_addresses,
       distinct()
 
   }else{
+    }
+    missing_codes <- temp_addresses %>%
+      filter(!RUIAN %in% found_codes$RUIAN)
+    if (nrow(missing_codes) > 0) {
+    }
+    missing_codes <- temp_addresses %>%
+      filter(!RUIAN %in% found_codes$RUIAN)
+    if (nrow(missing_codes) > 0) {
+    }
     cat("\n\nNo address variables specified\n\n")
   }
 
